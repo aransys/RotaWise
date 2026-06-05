@@ -1,0 +1,483 @@
+// RotaWise — Prisma schema
+// Multi-tenant workforce scheduling platform.
+// Every business-domain row carries a tenantId for hard data isolation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  BUSINESS_OWNER
+  MANAGER
+  EMPLOYEE
+}
+
+enum ShiftStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+}
+
+enum ScheduleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LeaveType {
+  HOLIDAY
+  SICK
+  UNPAID
+  CUSTOM
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum SwapStatus {
+  OPEN          // offered, awaiting a taker
+  CLAIMED       // a colleague has accepted, awaiting manager approval
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum TimesheetStatus {
+  OPEN          // clocked in, not yet out
+  COMPLETED     // clocked out
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  SCHEDULE_PUBLISHED
+  SHIFT_CHANGED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  LEAVE_REQUESTED
+  SWAP_REQUESTED
+  SWAP_CLAIMED
+  SWAP_APPROVED
+  GENERIC
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  CASUAL
+}
+
+// ----------------------------------------------------------------------------
+// Tenancy
+// ----------------------------------------------------------------------------
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("Europe/London")
+  currency  String   @default("GBP")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  employees      Employee[]
+  locations      Location[]
+  departments    Department[]
+  schedules      Schedule[]
+  shifts         Shift[]
+  leaveRequests  LeaveRequest[]
+  shiftSwaps     ShiftSwap[]
+  notifications  Notification[]
+  timesheets     Timesheet[]
+  skills         Skill[]
+  settings       TenantSettings?
+
+  @@index([slug])
+}
+
+model TenantSettings {
+  id                String  @id @default(cuid())
+  tenantId          String  @unique
+  maxWeeklyHours    Int     @default(48)
+  minRestHours      Int     @default(11)
+  overtimeThreshold Int     @default(40)
+  weekStartsOn      Int     @default(1) // 0 = Sunday, 1 = Monday
+  allowSelfSwap     Boolean @default(true)
+  requireGpsClockIn Boolean @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------------------
+// Auth (Auth.js) + Users
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  tenantId      String
+  email         String
+  name          String?
+  passwordHash  String?
+  image         String?
+  role          Role      @default(EMPLOYEE)
+  emailVerified DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee      Employee?
+  accounts      Account[]
+  sessions      Session[]
+  notifications Notification[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ----------------------------------------------------------------------------
+// Org structure
+// ----------------------------------------------------------------------------
+
+model Location {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  address   String?
+  latitude  Float?
+  longitude Float?
+  radius    Int      @default(150) // metres — geofence for GPS clock-in
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments Department[]
+  shifts      Shift[]
+  schedules   Schedule[]
+
+  @@index([tenantId])
+}
+
+model Department {
+  id         String   @id @default(cuid())
+  tenantId   String
+  locationId String
+  name       String
+  color      String   @default("#6366f1")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location  Location   @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  employees Employee[]
+  shifts    Shift[]
+
+  @@index([tenantId])
+  @@index([locationId])
+}
+
+// ----------------------------------------------------------------------------
+// People
+// ----------------------------------------------------------------------------
+
+model Employee {
+  id              String         @id @default(cuid())
+  tenantId        String
+  userId          String?        @unique
+  departmentId    String?
+  firstName       String
+  lastName        String
+  email           String
+  phone           String?
+  jobTitle        String?
+  employmentType  EmploymentType @default(FULL_TIME)
+  hourlyRate      Decimal        @default(0) @db.Decimal(10, 2)
+  contractedHours Int            @default(40) // per week
+  startDate       DateTime?
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  department    Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  skills        EmployeeSkill[]
+  availability  Availability[]
+  shifts        Shift[]
+  leaveRequests LeaveRequest[]
+  timesheets    Timesheet[]
+  swapsRequested ShiftSwap[]   @relation("SwapRequester")
+  swapsClaimed   ShiftSwap[]   @relation("SwapClaimer")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([departmentId])
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees EmployeeSkill[]
+  shifts    ShiftSkill[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model EmployeeSkill {
+  employeeId String
+  skillId    String
+  level      Int    @default(1) // 1-5 proficiency
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skill    Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, skillId])
+  @@index([skillId])
+}
+
+model Availability {
+  id         String   @id @default(cuid())
+  employeeId String
+  dayOfWeek  Int      // 0 = Sunday .. 6 = Saturday
+  startTime  String   // "09:00"
+  endTime    String   // "17:00"
+  isAvailable Boolean @default(true)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, dayOfWeek, startTime, endTime])
+  @@index([employeeId])
+}
+
+// ----------------------------------------------------------------------------
+// Scheduling
+// ----------------------------------------------------------------------------
+
+model Schedule {
+  id          String         @id @default(cuid())
+  tenantId    String
+  locationId  String
+  name        String
+  weekStart   DateTime       // Monday 00:00 of the rota week
+  status      ScheduleStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  shifts   Shift[]
+
+  @@unique([locationId, weekStart])
+  @@index([tenantId])
+  @@index([locationId, weekStart])
+}
+
+model Shift {
+  id            String      @id @default(cuid())
+  tenantId      String
+  scheduleId    String
+  locationId    String
+  departmentId  String?
+  employeeId    String?     // null = open/unassigned shift
+  start         DateTime
+  end           DateTime
+  breakMinutes  Int         @default(0)
+  status        ShiftStatus @default(DRAFT)
+  notes         String?
+  isRecurring   Boolean     @default(false)
+  recurrenceId  String?     // groups shifts generated from one recurrence rule
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedule     Schedule     @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  location     Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  employee     Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  requiredSkills ShiftSkill[]
+  timesheets   Timesheet[]
+  swaps        ShiftSwap[]
+
+  @@index([tenantId])
+  @@index([scheduleId])
+  @@index([employeeId])
+  @@index([start, end])
+}
+
+model ShiftSkill {
+  shiftId String
+  skillId String
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([shiftId, skillId])
+  @@index([skillId])
+}
+
+// ----------------------------------------------------------------------------
+// Leave
+// ----------------------------------------------------------------------------
+
+model LeaveRequest {
+  id          String        @id @default(cuid())
+  tenantId    String
+  employeeId  String
+  type        LeaveType
+  customType  String?
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  status      RequestStatus @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Shift swaps
+// ----------------------------------------------------------------------------
+
+model ShiftSwap {
+  id          String     @id @default(cuid())
+  tenantId    String
+  shiftId     String
+  requesterId String
+  claimerId   String?
+  status      SwapStatus @default(OPEN)
+  reason      String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  requester Employee @relation("SwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  claimer   Employee? @relation("SwapClaimer", fields: [claimerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([shiftId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Time tracking
+// ----------------------------------------------------------------------------
+
+model Timesheet {
+  id           String          @id @default(cuid())
+  tenantId     String
+  employeeId   String
+  shiftId      String?
+  clockIn      DateTime
+  clockOut     DateTime?
+  breakMinutes Int             @default(0)
+  clockInLat   Float?
+  clockInLng   Float?
+  clockOutLat  Float?
+  clockOutLng  Float?
+  status       TimesheetStatus @default(OPEN)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([clockIn])
+}
+
+// ----------------------------------------------------------------------------
+// Notifications
+// ----------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(cuid())
+  tenantId  String
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId, isRead])
+}

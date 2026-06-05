@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: rotawise-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rotawise
+      POSTGRES_PASSWORD: rotawise
+      POSTGRES_DB: rotawise
+    ports:
+      - "5432:5432"
+    volumes:
+      - rotawise_pgdata:/var/lib/postgresql/data
+volumes:
+  rotawise_pgdata:
