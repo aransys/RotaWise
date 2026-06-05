@@ -114,6 +114,42 @@ After pulling new dependencies (Vitest, Playwright, Nodemailer were added over t
 run `npm install` once and **commit the updated `package-lock.json`** so CI stays green.
 Update the badge URL at the top of this file with your `OWNER/REPO` path.
 
+## Deployment
+
+### Docker (recommended)
+
+A multi-stage `Dockerfile` builds a minimal standalone image, and
+`docker-compose.prod.yml` runs Postgres, a one-shot migration, and the app:
+
+```bash
+# Required: a long random secret and your public URL
+export AUTH_SECRET="$(openssl rand -base64 32)"
+export AUTH_URL="https://your-domain.com"     # or http://localhost:3000
+
+docker compose -f docker-compose.prod.yml up -d --build
+# (optional) load demo data once:
+docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+```
+
+The `migrate` service applies `prisma migrate deploy` before the app starts,
+the app serves on port 3000, and `/api/health` is wired as a container
+healthcheck (it pings the database). This single-instance Node setup is where
+the SSE real-time notifications work fully.
+
+### Vercel
+
+Push to GitHub and import the repo — Vercel auto-detects Next.js (`vercel.json`
+pins `prisma generate && next build`). Set `DATABASE_URL`, `AUTH_SECRET`, and
+`AUTH_URL` (plus optional `SMTP_*` / `AUTH_GOOGLE_*`) in the project's
+environment variables, and point `DATABASE_URL` at a hosted Postgres (Neon,
+Supabase, RDS, etc.). Run `prisma migrate deploy` against that database as a
+release step.
+
+Note: on Vercel's serverless runtime the in-process SSE push can't span
+invocations, so the bell falls back to its periodic refetch. For real-time push
+there, run the Docker image on a persistent Node host, or add a Redis pub/sub
+adapter behind `publishToUser` / `subscribeUser`.
+
 ## Project structure
 
 ```

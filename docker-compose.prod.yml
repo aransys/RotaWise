@@ -1,0 +1,70 @@
+# Production-style stack: Postgres + one-shot migration + the app.
+#   AUTH_SECRET=... AUTH_URL=https://your-domain docker compose -f docker-compose.prod.yml up -d --build
+# Seed demo data once (optional):
+#   docker compose -f docker-compose.prod.yml --profile seed run --rm seed
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rotawise
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rotawise}
+      POSTGRES_DB: rotawise
+    volumes:
+      - rotawise_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rotawise"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    command: npx prisma migrate deploy
+    environment:
+      DATABASE_URL: postgresql://rotawise:${POSTGRES_PASSWORD:-rotawise}@db:5432/rotawise?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://rotawise:${POSTGRES_PASSWORD:-rotawise}@db:5432/rotawise?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in your environment or .env}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-RotaWise <no-reply@rotawise.local>}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Optional one-off seed: `--profile seed run --rm seed`
+  seed:
+    build:
+      context: .
+      target: builder
+    command: npm run db:seed
+    profiles: ["seed"]
+    environment:
+      DATABASE_URL: postgresql://rotawise:${POSTGRES_PASSWORD:-rotawise}@db:5432/rotawise?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  rotawise_pgdata:

@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.github
+npm-debug.log
+.env
+.env.local
+.DS_Store
+coverage
+playwright-report
+test-results
+tests
+*.md
+Dockerfile
+.dockerignore
+docker-compose*.yml
