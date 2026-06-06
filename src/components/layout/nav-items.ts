@@ -1,4 +1,4 @@
-import { LayoutDashboard, CalendarDays, Users, MapPin, Plane, ArrowLeftRight, Clock, BarChart3, Settings } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Users, MapPin, Plane, ArrowLeftRight, Clock, BarChart3, ScrollText, Settings } from "lucide-react";
 import type { Role } from "@prisma/client";
 
 export interface NavItem {
@@ -17,5 +17,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Shift swaps", href: "/swaps", icon: ArrowLeftRight },
   { label: "Timesheets", href: "/timesheets", icon: Clock },
   { label: "Reports", href: "/reports", icon: BarChart3, minRole: "MANAGER" },
+  { label: "Audit log", href: "/audit", icon: ScrollText, minRole: "BUSINESS_OWNER" },
   { label: "Settings", href: "/settings", icon: Settings, minRole: "BUSINESS_OWNER" },
 ];

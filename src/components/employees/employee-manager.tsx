@@ -19,7 +19,7 @@ type Employee = {
   id: string; firstName: string; lastName: string; email: string; phone: string | null;
   jobTitle: string | null; employmentType: string; hourlyRate: number; contractedHours: number;
   departmentId: string | null; departmentName: string | null; startDate: string | null;
-  hasLogin: boolean; invited: boolean; skillIds: string[];
+  hasLogin: boolean; invited: boolean; skillIds: string[]; holidayAllowance: number;
 };
 type Dept = { id: string; name: string };
 type Skill = { id: string; name: string };
@@ -34,7 +34,7 @@ const EMPLOYMENT_TYPES = [
 function emptyForm() {
   return {
     firstName: "", lastName: "", email: "", phone: "", jobTitle: "",
-    employmentType: "FULL_TIME", hourlyRate: "0", contractedHours: "40",
+    employmentType: "FULL_TIME", hourlyRate: "0", contractedHours: "40", holidayAllowance: "28",
     departmentId: "", startDate: "", skillIds: [] as string[],
   };
 }
@@ -65,6 +65,7 @@ export function EmployeeManager({ employees, departments, skills }: { employees:
       firstName: e.firstName, lastName: e.lastName, email: e.email, phone: e.phone ?? "",
       jobTitle: e.jobTitle ?? "", employmentType: e.employmentType,
       hourlyRate: String(e.hourlyRate), contractedHours: String(e.contractedHours),
+      holidayAllowance: String(e.holidayAllowance),
       departmentId: e.departmentId ?? "", startDate: e.startDate ?? "", skillIds: e.skillIds,
     });
     setNewSkill("");
@@ -84,6 +85,7 @@ export function EmployeeManager({ employees, departments, skills }: { employees:
       employmentType: form.employmentType,
       hourlyRate: Number(form.hourlyRate) || 0,
       contractedHours: Number(form.contractedHours) || 0,
+      holidayAllowance: Number(form.holidayAllowance) || 0,
       departmentId: form.departmentId || null,
       startDate: form.startDate || undefined,
       skillIds: form.skillIds,
@@ -277,8 +279,12 @@ export function EmployeeManager({ employees, departments, skills }: { employees:
               <div className="grid gap-2"><Label>Contract (h/wk)</Label>
                 <Input type="number" min={0} max={168} value={form.contractedHours} onChange={(e) => setForm({ ...form, contractedHours: e.target.value })} /></div>
             </div>
-            <div className="grid gap-2"><Label>Start date</Label>
-              <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2"><Label>Start date</Label>
+                <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></div>
+              <div className="grid gap-2"><Label>Holiday allowance (days/yr)</Label>
+                <Input type="number" min={0} max={366} value={form.holidayAllowance} onChange={(e) => setForm({ ...form, holidayAllowance: e.target.value })} /></div>
+            </div>
 
             <div className="grid gap-2">
               <Label>Skills</Label>

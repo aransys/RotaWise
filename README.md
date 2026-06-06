@@ -181,6 +181,15 @@ src/
 
 Every business row carries a `tenantId`. The signed-in user's `tenantId` and `role` are baked into the JWT (`src/auth.config.ts`). Server pages resolve the tenant via `getCurrentUser()` and **always** filter queries by it; API routes go through `tenantContext()`. This keeps each company's data hard-isolated within a single shared database.
 
+## Security & operations
+
+- **Audit log** — important actions (publishing rotas, approving leave/swaps, employee and settings changes) are recorded via `src/lib/audit.ts` into an `AuditLog` table. Business Owners can review the trail at **/audit**. Logging is best-effort and never blocks the action.
+- **Rate limiting** — `src/lib/ratelimit.ts` throttles abuse-prone endpoints (signup, invite redemption) by IP with a fixed window, returning `429` with `Retry-After`. In-memory per instance; back it with Redis for multi-instance.
+- **Leave balances** — each employee has an annual `holidayAllowance` (days). The Leave page shows allowance / taken / remaining, computed from approved holiday in the current calendar year.
+- **Scaling real-time** — set `REDIS_URL` to route notification pushes through Redis pub/sub so SSE works across multiple instances; unset, it's in-process. Same `publishToUser` / `subscribeUser` interface either way (`src/lib/realtime.ts`).
+
+> After pulling these changes, run `npm install` (adds `ioredis`) and `npm run db:migrate` — a migration adds the `AuditLog` table and `Employee.holidayAllowance`, and regenerates the Prisma client.
+
 ## Roadmap (next build phases)
 
 The data model already supports these — the remaining work is interaction logic and UI:

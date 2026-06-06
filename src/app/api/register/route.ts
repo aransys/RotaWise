@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({
   companyName: z.string().min(2),
@@ -16,6 +17,10 @@ function slugify(s: string) {
 }
 
 export async function POST(req: Request) {
+  // Throttle signups: 5 per 10 minutes per IP.
+  const limited = enforceRateLimit(req, "register", 5, 10 * 60_000);
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

@@ -3,6 +3,7 @@ import { tenantContext } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { updateSettingsSchema } from "@/lib/validators";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(req: Request) {
   const ctx = await tenantContext();
@@ -41,6 +42,12 @@ export async function PATCH(req: Request) {
       },
     }),
   ]);
+
+  await audit({
+    tenantId: ctx.tenantId, userId: ctx.userId,
+    action: "settings.update", entity: "TenantSettings", entityId: ctx.tenantId,
+    summary: "Updated company settings",
+  });
 
   return NextResponse.json({ ok: true });
 }

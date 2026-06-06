@@ -38,6 +38,9 @@ export default async function EmployeesPage() {
         hasLogin: !!e.userId,
         invited: pendingInvites.has(e.id),
         skillIds: e.skills.map((s) => s.skillId),
+        // holidayAllowance resolves to its real type after `prisma generate`.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        holidayAllowance: (e as any).holidayAllowance ?? 28,
       }))}
     />
   );

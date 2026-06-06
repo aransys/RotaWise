@@ -42,7 +42,9 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function LeaveManager({ isManager, canRequest, requests }: { isManager: boolean; canRequest: boolean; requests: LeaveRow[] }) {
+type Balance = { allowance: number; used: number; remaining: number } | null;
+
+export function LeaveManager({ isManager, canRequest, balance, requests }: { isManager: boolean; canRequest: boolean; balance: Balance; requests: LeaveRow[] }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -118,6 +120,21 @@ export function LeaveManager({ isManager, canRequest, requests }: { isManager: b
       />
 
       {error && <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+
+      {balance && (
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          {[
+            { label: "Annual allowance", value: balance.allowance, tone: "" },
+            { label: "Taken this year", value: balance.used, tone: "" },
+            { label: "Remaining", value: balance.remaining, tone: balance.remaining <= 3 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400" },
+          ].map((s) => (
+            <Card key={s.label} className="p-5">
+              <div className="text-xs text-muted-foreground">{s.label}</div>
+              <div className={`mt-1 text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}<span className="ml-1 text-sm font-normal text-muted-foreground">days</span></div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Card className="divide-y">
         {requests.length === 0 ? (

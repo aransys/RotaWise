@@ -107,6 +107,7 @@ model Tenant {
   timesheets     Timesheet[]
   skills         Skill[]
   settings       TenantSettings?
+  auditLogs      AuditLog[]
 
   @@index([slug])
 }
@@ -249,6 +250,7 @@ model Employee {
   employmentType  EmploymentType @default(FULL_TIME)
   hourlyRate      Decimal        @default(0) @db.Decimal(10, 2)
   contractedHours Int            @default(40) // per week
+  holidayAllowance Int           @default(28) // annual paid-leave days
   startDate       DateTime?
   isActive        Boolean        @default(true)
   createdAt       DateTime       @default(now())
@@ -480,4 +482,24 @@ model Notification {
 
   @@index([tenantId])
   @@index([userId, isRead])
+}
+
+// ----------------------------------------------------------------------------
+// Audit log
+// ----------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?  // actor (no FK so logs survive user deletion)
+  actorName String?
+  action    String   // e.g. "shift.create", "leave.approve"
+  entity    String   // e.g. "Shift", "LeaveRequest"
+  entityId  String?
+  summary   String   // human-readable description
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }

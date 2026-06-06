@@ -3,6 +3,7 @@ import { tenantContext } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { updateEmployeeSchema } from "@/lib/validators";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await tenantContext();
@@ -46,13 +47,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       employmentType: d.employmentType,
       hourlyRate: d.hourlyRate,
       contractedHours: d.contractedHours,
+      holidayAllowance: d.holidayAllowance,
       departmentId: d.departmentId === undefined ? undefined : d.departmentId,
       startDate: d.startDate ? new Date(`${d.startDate}T00:00:00`) : undefined,
       isActive: d.isActive,
       ...(d.skillIds !== undefined
         ? { skills: { deleteMany: {}, create: d.skillIds.map((skillId) => ({ skillId, level: 1 })) } }
         : {}),
-    },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+  });
+  await audit({
+    tenantId: ctx.tenantId, userId: ctx.userId,
+    action: "employee.update", entity: "Employee", entityId: id,
+    summary: `Updated employee ${existing.firstName} ${existing.lastName}`,
   });
   return NextResponse.json({ employee });
 }
@@ -68,5 +76,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.employee.update({ where: { id }, data: { isActive: false } });
+  await audit({
+    tenantId: ctx.tenantId, userId: ctx.userId,
+    action: "employee.deactivate", entity: "Employee", entityId: id,
+    summary: `Deactivated employee ${existing.firstName} ${existing.lastName}`,
+  });
   return NextResponse.json({ ok: true });
 }

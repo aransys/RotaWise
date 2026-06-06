@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getValidInvite } from "@/lib/invite";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 const schema = z.object({
   token: z.string().min(1),
@@ -12,6 +13,10 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
+  // Throttle invite redemption attempts: 10 per 10 minutes per IP.
+  const limited = enforceRateLimit(req, "invite-accept", 10, 10 * 60_000);
+  if (limited) return limited;
+
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });

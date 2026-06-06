@@ -4,6 +4,7 @@ import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { reviewSwapSchema } from "@/lib/validators";
 import { notify } from "@/lib/notifications";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await tenantContext();
@@ -57,6 +58,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
     }
   }
+
+  await audit({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    action: approved ? "swap.approve" : "swap.reject",
+    entity: "ShiftSwap",
+    entityId: swap.id,
+    summary: `${approved ? "Approved" : "Rejected"} shift swap: ${swap.requester.firstName} ${swap.requester.lastName} → ${swap.claimer?.firstName ?? "?"} ${swap.claimer?.lastName ?? ""}`.trim(),
+  });
 
   return NextResponse.json({ ok: true, approved });
 }

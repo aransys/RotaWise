@@ -3,6 +3,7 @@ import { tenantContext } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { publishSchema } from "@/lib/validators";
+import { audit } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const ctx = await tenantContext();
@@ -43,6 +44,12 @@ export async function POST(req: Request) {
       link: "/schedule",
     }));
   if (notifications.length) await prisma.notification.createMany({ data: notifications });
+
+  await audit({
+    tenantId: ctx.tenantId, userId: ctx.userId,
+    action: "schedule.publish", entity: "Schedule", entityId: schedule.id,
+    summary: `Published rota for week of ${new Date(weekStart).toLocaleDateString("en-GB")} (${schedule.shifts.length} shifts)`,
+  });
 
   return NextResponse.json({ ok: true, published: schedule.shifts.length });
 }

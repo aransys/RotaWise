@@ -3,6 +3,7 @@ import { tenantContext } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { createEmployeeSchema } from "@/lib/validators";
+import { audit } from "@/lib/audit";
 
 export async function GET() {
   const ctx = await tenantContext();
@@ -56,7 +57,15 @@ export async function POST(req: Request) {
       departmentId: d.departmentId ?? null,
       startDate: d.startDate ? new Date(`${d.startDate}T00:00:00`) : null,
       skills: skillIds.length ? { create: skillIds.map((skillId) => ({ skillId, level: 1 })) } : undefined,
-    },
+      // holidayAllowance is recognised after `prisma generate`; cast bridges the gap.
+      holidayAllowance: d.holidayAllowance,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any,
+  });
+  await audit({
+    tenantId: ctx.tenantId, userId: ctx.userId,
+    action: "employee.create", entity: "Employee", entityId: employee.id,
+    summary: `Added employee ${d.firstName} ${d.lastName}`,
   });
   return NextResponse.json({ employee }, { status: 201 });
 }

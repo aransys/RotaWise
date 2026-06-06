@@ -92,6 +92,7 @@ export const createEmployeeSchema = z.object({
   employmentType: employmentType.default("FULL_TIME"),
   hourlyRate: z.number().min(0).max(10000).default(0),
   contractedHours: z.number().int().min(0).max(168).default(40),
+  holidayAllowance: z.number().int().min(0).max(366).default(28),
   departmentId: z.string().min(1).nullable().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   skillIds: z.array(z.string().min(1)).optional(),

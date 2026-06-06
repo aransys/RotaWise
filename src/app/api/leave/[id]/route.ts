@@ -4,6 +4,7 @@ import { can } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { reviewLeaveSchema } from "@/lib/validators";
 import { notify } from "@/lib/notifications";
+import { audit } from "@/lib/audit";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await tenantContext();
@@ -39,6 +40,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       link: "/leave",
     });
   }
+
+  await audit({
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    action: approved ? "leave.approve" : "leave.reject",
+    entity: "LeaveRequest",
+    entityId: leave.id,
+    summary: `${approved ? "Approved" : "Rejected"} ${leave.type.toLowerCase()} leave for ${leave.employee.firstName} ${leave.employee.lastName}`,
+  });
 
   return NextResponse.json({ leave: updated });
 }
