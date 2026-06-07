@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { isManagerOrAbove } from "@/lib/permissions";
-import { getWeekStart, addDays, evaluateAll, type RuleEmployee } from "@/lib/scheduling";
+import { getWeekStart, evaluateAll, type RuleEmployee } from "@/lib/scheduling";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { RotaEditor } from "@/components/schedule/rota-editor";
@@ -14,7 +14,6 @@ export default async function SchedulePage({
   const user = await requireUser();
   const { week } = await searchParams;
   const weekStart = week ? getWeekStart(new Date(week)) : getWeekStart();
-  const weekEnd = addDays(weekStart, 7);
   const canEdit = isManagerOrAbove(user.role);
 
   const location = await prisma.location.findFirst({

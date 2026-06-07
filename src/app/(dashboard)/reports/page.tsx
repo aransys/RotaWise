@@ -21,7 +21,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const weekEnd = addDays(weekStart, 7);
   const now = new Date();
 
-  const [shifts, timesheets, leave, settings, employeeCount] = await Promise.all([
+  const [shifts, timesheets, leave, employeeCount] = await Promise.all([
     prisma.shift.findMany({
       where: { tenantId: user.tenantId, start: { gte: weekStart, lt: weekEnd } },
       include: { employee: true, department: true },
@@ -37,7 +37,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       },
       include: { employee: true },
     }),
-    prisma.tenantSettings.findUnique({ where: { tenantId: user.tenantId } }),
     prisma.employee.count({ where: { tenantId: user.tenantId, isActive: true } }),
   ]);
 
