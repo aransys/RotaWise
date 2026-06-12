@@ -13,6 +13,8 @@ export const authConfig = {
       const isPublic =
         nextUrl.pathname === "/" ||
         nextUrl.pathname.startsWith("/api/auth") ||
+        nextUrl.pathname.startsWith("/api/register") ||
+        nextUrl.pathname.startsWith("/api/health") ||
         nextUrl.pathname.startsWith("/invite") ||
         nextUrl.pathname.startsWith("/api/invite");
 
